@@ -2,23 +2,13 @@
 ASR experimenting with Neural Networks using lynguistic resources for Polish language
 =====================================================================================
 
-This repository contains experimental code implementing CNNs for ASR tests based on CLARIN-PL resources. CLARIN-PL is Common Language Resources and Technology Infrastructure related project aimed on Polsih language )http://clarin-pl.eu/en/home-page/=.
-
-The code is mainly based on lasagne tutorial examples. Modules stored in the repository implement the following functionalities:
-- converting acoustic data in extended CLARIN-PL shape to the shape convinient to load with python/numpy code 
-- extracting datasets consisting of specified fraction of bulk data and creating contextual feature vectors
-- running CNN traininig and evaluation
-
-Is is assumed that the input data come from acoustic corpus collected in the scope of CLARIN-PL. Orginal CLARIN-PL resources lack audio alignment to phonetic segments (phonemes). The phonetic transcription of utterances and their alignment to audio data are obtained using acoustic model trained on large amount of recordings in Polish.
-
-ASR experimenting with Neural Networks using lynguistic resources for Polish language
-=====================================================================================
-
 This repository contains experimental code implementing CNNs for ASR tests based on CLARIN-PL resources. CLARIN-PL is Common Language Resources and Technology Infrastructure related project aimed on Polsih language (http://clarin-pl.eu/en/home-page).
+
 The code is mainly based on lasagne tutorial examples. Modules stored in the repository implement the following functionalities:
 - converting acoustic data in extended CLARIN-PL shape to the shape convinient to load with python/numpy code 
 - extracting datasets consisting of specified fraction of bulk data and creating contextual feature vectors
-- running CNN traininig and accuracy evaluation
+- running CNN traininig and accuracy evaluation.
+
 Is is assumed that the input data come from acoustic corpus collected in the scope of CLARIN-PL. Orginal CLARIN-PL resources lack audio alignment to phonetic segments (phonemes). The phonetic transcription of utterances and their alignment to audio data are obtained using acoustic model trained on large amount of recordings in Polish. 
 
 Speech recording samples from CLARIN-PL corpus were segmented into 10ms frames. Each frame were assigned to the phone from teh sequence of phones in phonetic transcription of an utterance. Each frame was subject to feature extraction procedure. USED featires are Mel-scale spectral features obtained with 41 element filter bank. Additionally delta and delta-delta features were compyted resulting totally in 123 MFSC features per frame. For each frame a pair (feature vector, phoneme symbol) was created. Our aim is to create and train an NN which isbe fetched with features and produces on its output an estimation of phone probability provided given feature vector.
