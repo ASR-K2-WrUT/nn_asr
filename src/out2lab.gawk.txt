@@ -1,0 +1,102 @@
+function ceil(valor)
+{
+   return (valor == int(valor)) ? valor : int(valor)+1
+}
+
+function print_output( cls, cls_cnt )
+{
+   for ( i = 0; i < cls_cnt; i++ )
+      if ( i == cls )
+         printf( " 1" );
+      else
+         printf( " 0" );
+}
+
+function get_phn_str( phn_data )   
+{   
+   gsub( /\{/, "", phn_data );
+   gsub( /\}/, "", phn_data );
+   if ( phn_data == "sil" )
+      return "sil";
+      
+   t_ind = index( phn_data, "[" );
+   if ( t_ind > 0 )
+      phn_data = substr( phn_data, 1, t_ind - 1)
+      
+   s_ind = index( phn_data, "-" );
+   if ( s_ind > 0 )
+   {
+      tail = substr( phn_data, s_ind + 1 )
+      e_ind = index( tail, "+" );
+      if ( e_ind == 0 )
+         return tail;
+      else
+         return substr( tail, 1, e_ind - 1);
+   }
+   e_ind = index( phn_data, "+" );
+   
+   if ( e_ind > 0 )
+      return substr( phn_data, 1, e_ind - 1);
+      
+   return phn_data;
+}   
+   
+BEGIN {phase = 0; cls_count = 0; phone_count = 0; }
+{
+   if ( phase == 0 )
+   {
+      if ( $1 == "****" )
+      {
+         phase = 1;
+      }
+      else
+      {
+         for ( j = 1; j <= NF; j++ )
+         {
+            ph_symb = $j;
+            phone_class[ ph_symb ] = cls_count;
+            phone_count++;
+         }
+         cls_count++;
+      }         
+   }
+   else
+   {
+      if ( substr($1, 1, 1) == "[" )
+      {
+         if ( length($1) == 1 )
+         {
+            s_frm = $2;
+            e_frm = substr($3, 1, length($3) - 1);;
+            phn_data = $5;
+         }   
+         else
+         {
+            s_frm = substr($1, 2 );
+            e_frm = substr($2, 1, length($2) - 1);
+            phn_data = $4;
+         }
+         
+         j = NF;
+         if ($j == "(sp)")
+            phn_str = "sp";
+         else
+            phn_str = get_phn_str( phn_data );
+
+         is = s_frm + 0;
+         ie = e_frm + 0;                    
+         printf( "%4d  %4d  ", is, ie );        
+         if ( phn_str in phone_class ) {           
+            phn = phone_class[phn_str];      
+            print_output( phn, cls_count );
+         }
+         else {
+           printf( "PHERROR ");
+         }
+         printf("\r\n" );         
+      }
+   }
+}
+
+END {}
+      

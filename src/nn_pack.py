@@ -1,0 +1,148 @@
+""""
+   The program loads text file containing all training/development/testing data segmented by **** tags into 
+   isolated utterances and stores it as binary numpy arrays.
+   Two arrays are stored that can be combined by 
+"""
+   
+import numpy as np
+import sys
+import re
+import asr
+
+# Constants definition
+EOU_TAG = "****";
+
+# ===========================================================================================
+
+def get_utter( f_in, utters ):
+    """
+       It creates python  sequence of pairs where each pair represents single utterance
+       The pair consists of two numpy 2D arrays where rows correspond to frames and columns 
+       correspond to features/classes
+    """
+    
+    # initialize utter block - sequences of frames for single utterance
+    f_block_tmp = [];
+    c_block_tmp = [];
+    
+    # create numpy arrays for single input/feature and output/classes vectors
+    frm_f = np.zeros( asr.FEATURE_COUNT );
+    frm_c = np.zeros( asr.CLASS_COUNT, dtype=np.int16 );
+    
+    while ( True ):
+        line = f_in.readline();
+        
+        # remove leading/trailing whitecahrs
+        line = line.rstrip();
+        line = line.lstrip();        
+        
+        if ( len(line) == 0 ):
+            # EOF was encountered - we can safely exit because EOL is always preceeded by ****
+            return False;
+            
+        if ( line[0:4] == EOU_TAG ):
+            # End-of-utterance tag detected; prepare the pair representing an utterance and add it to collection
+            f_block = np.array( f_block_tmp );
+            c_block = np.array( c_block_tmp );
+            utters.append( [f_block, c_block] );
+            # print "Completed: " + line[4:];
+            f_block_tmp = [];
+            c_block_tmp = [];
+            
+            # single call prepares only single utterance - so now it returns
+            return True;
+            
+        # this is the next data line
+        elems = re.split( "\ +", line );
+        for i in range( asr.FEATURE_COUNT ):
+            frm_f[i] = float( elems[i] )
+        for i in range( asr.CLASS_COUNT ):
+            frm_c[i] =  int( elems[i + asr.FEATURE_COUNT] );
+        # append in/out vectors to the block of current utterance    
+        f_block_tmp.append( np.copy(frm_f) );
+        c_block_tmp.append( np.copy(frm_c) );
+     
+    # Should never happen - just for the case
+    print "Returning wrongly" 
+    return False;
+
+# ===========================================================================================   
+    
+def save_utters( utters, out_file ):    
+    """
+       It saves features and classes vectors as two 3D arrays.
+       Indices are { uterance_ind, frame_ind, feature/class_ind }
+    """
+    frm_cnt = 0;
+    for i in range( len(utters ) ):
+       frm_cnt = frm_cnt + len(utters[i][0]);
+    print "Total frames: " + str(frm_cnt );
+    features = [ utters[i][0] for i in range( len(utters) ) ];
+    classes  = [ utters[i][1] for i in range( len(utters) ) ];
+    np_features = np.array( features );
+    np_classes  = np.array( classes );
+
+    f = open( out_file, "wb" );
+    np.savez_compressed( f, a=np_features, b=np_classes );
+    f.close();
+
+# ===========================================================================================      
+   
+def load_utters( in_file ):    
+    data = np.load( in_file );
+    return [ data['a'], data['b'] ];
+
+# ===========================================================================================       
+    
+def test( in_file, utters ):
+   lf, lc = load_utters( out_file );
+
+   # print "Features restored";
+   # print lf;
+
+   # print "Classes restored";
+   # print lc;
+
+   # print utters;
+   
+    
+# ===================================================================================
+# main()
+# ===================================================================================   
+if ( len( sys.argv ) < 3 ):
+    print "Missing params";
+    sys.exit( 1 );
+
+# Each uttter is a pair of ndarrays: containing 
+# features and classes for subsequent frames. Each
+# array has as many rows as the number of frames. 
+# Number of columns is equal to features and classes count
+utters = [];
+
+in_file = sys.argv[1];
+out_file = sys.argv[2];
+f_in = open( in_file, "rt" );
+
+# ==============================================================
+# First line contain feature and class count (per frame)
+# ==============================================================
+line = f_in.readline();
+line  = asr.clipLine( line );
+counts = re.split( "\ +", line );
+asr.FEATURE_COUNT = int( counts[0] );
+asr.CLASS_COUNT = int( counts[1] );
+print "Feature count " + str( asr.FEATURE_COUNT );
+print "Class count " + str( asr.CLASS_COUNT );
+
+proc_ut_cnt = 0;
+while ( get_utter( f_in, utters ) ):
+    proc_ut_cnt = proc_ut_cnt + 1;
+    # print "===== " + str(proc_ut_cnt) + " ended";
+    
+print "Count of utterences: " + str( len(utters) )
+f_in.close();
+
+save_utters( utters, out_file );
+# test( out_file, utters );
+
+    
