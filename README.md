@@ -2,7 +2,7 @@
 ASR experimenting with Neural Networks using lynguistic resources for Polish language
 =====================================================================================
 
-This repository contains experimental code implementing CNNs for ASR tests based on CLARIN-PL resources. CLARIN-PL is Common Language Resources and Technology Infrastructure related project aimed on Polsih language (http://clarin-pl.eu/en/home-page).
+This repository contains experimental code implementing CNNs for ASR tests based on TIMIT resources. Because of copyright restrictions TIMIT data are not included here. In order to experiment with TIMIT dataset raw data must bu purchased from LDC.  CLARIN-PL is Common Language Resources and Technology Infrastructure related project aimed on Polsih language (http://clarin-pl.eu/en/home-page).
 
 The code is mainly based on lasagne tutorial examples. Modules stored in the repository implement the following functionalities:
 - converting acoustic data in extended CLARIN-PL shape to the shape convinient to load with python/numpy code 
