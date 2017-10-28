@@ -19,3 +19,4 @@ The subset of utterances from CLARIN-PL corpus was divided into training, valida
 
 Defining acoustic contex of a frame makes it possible to improve accuracy of phone recognition. The dataset extraction procedure combines several features from frames adjacent to the central one and creates compound feature vector of a frame. In this way acoustic context of a frame can be taken into account wher recognizing a phone, the frame belongs to. The width of the context is defined by the number of frames on the single side (left or right) of the central frame - let us call it context radius. Typically the context radius used in ASR is between 1 to 10.
 
+The Python readable data sets are prepared from raw recorded audio samples commplemented with its ortographic annotation. The datasets are stored as saved numpy arrays, so it can be read and used in any code written in Python.
