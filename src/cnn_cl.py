@@ -1,15 +1,17 @@
 #!/usr/bin/env python
 
 """
-Usage example employing Lasagne for digit recognition using the MNIST dataset.
+This source file presents an example how to use the datasets prepared with TIMIT-like
+acoustic corpora in training and testing neural networks aimed phoneme recognition or
+state probability estimation in HMM-NN hybrid ASR recognition.
 
-This example is deliberately structured as a long flat file, focusing on how
-to use Lasagne, instead of focusing on writing maximally modular and reusable
-code. It is used as the foundation for the introductory Lasagne tutorial:
-http://lasagne.readthedocs.org/en/latest/user/tutorial.html
+This demo is based on the code published as a part of Lasagne tutorial. As in the 
+case of the primary code, it is mainly focused on loading ans usage of ASR datasets
+instead of focusing on writing maximally modular and reusable code. 
 
-More in-depth examples and reproductions of paper results are maintained in
-a separate repository: https://github.com/Lasagne/Recipes
+Dataset building modules compatible with the dataset format used herein can be found 
+at GitHub: https://github.com/ASR-K2-WrUT/nn_asr
+
 """
 
 from __future__ import print_function
@@ -29,20 +31,47 @@ import matplotlib.pyplot as plt
 from lasagne.nonlinearities import LeakyRectify
 
 rows_cnt = -1;
-layers_cnt = -1;
+channels_cnt = -1;
 features_cnt = -1;
 output_size = -1;
 mean_horizon = 5;
 phone_list_file = "all_phones_grp.txt"
 
-# ################## Download and prepare the MNIST dataset ##################
-#  It doesn't involve Lasagne at all.
 
-def load_dataset_crafted( train_fn, valid_fn="", test_fn="" ):
+# ====================================================================================
+# ====================================================================================
+# Functions that load or prepare data fro NN training/testing
+# ====================================================================================
+# ====================================================================================
+
+def load_dataset_crafted( train_fn="", valid_fn="", test_fn="" ):
+    """
+       The function loads train/development/test datasets form files specified as parameters. 
+       If a filename is an empty string then the corresponding dataset is not loaded       
+       For each actually loaded dataset a triple is created: 
+                         (input_array, output_array, frame_position_array )
+       which is returned by the function.  
+       
+       Input_array is a 4D array containing features being used as inputs to a NN. The first 
+       dimension of input array corresponds to dataset elements which we call "recognizable objects". 
+       The recognizable object corresponds to a single frame obtained from a audio file containing 
+       the recorded speech sample (utterance). Features of the recognizable object are features 
+       extracted from a subsequence of frames surrounding the one represented by the object. Using 
+       features not only from the single frame but also from its neighbours makes it possible
+       to take context into account.
+       
+       A 3D array constituted by remaining dimensions contains features of a recognizable object.
+       Output_array is an 1D array containing true phone indices of a recognizable object. 
+    
+       Frame_position_array contains indices of recognizable objects within the utterances, 
+       they come from. This information is useful is boundaries of utterances need to be
+       determined.
+    """
+    
     global rows_cnt;
     global features_cnt;
     global output_size;
-    global layers_cnt;
+    global channels_cnt;
     
     def reorder_outputs( y_data, lookup ):
         """
@@ -69,14 +98,13 @@ def load_dataset_crafted( train_fn, valid_fn="", test_fn="" ):
         else:
             dataset = ( inputs, outputs, None );      
         f.close();
-        return dataset
-   
+        return dataset   
    
     if ( valid_fn != "" ):
        print( "Loading validation set: " +  valid_fn );        
        X_val, y_val, pos_val = load_clarin( valid_fn );
        output_size = np.max( y_val ) + 1;          
-       tr_size, layers_cnt, rows_cnt, features_cnt = X_val.shape;       
+       tr_size, channels_cnt, rows_cnt, features_cnt = X_val.shape;       
     else:
        X_val = None
        y_val = None
@@ -85,7 +113,7 @@ def load_dataset_crafted( train_fn, valid_fn="", test_fn="" ):
     if ( test_fn != "" ):
        print( "Loading test set: " +  test_fn );        
        X_test, y_test, pos_test   = load_clarin( test_fn );    
-       tr_size, layers_cnt, rows_cnt, features_cnt = X_test.shape;              
+       tr_size, channels_cnt, rows_cnt, features_cnt = X_test.shape;              
     else:
        X_test = None
        y_test = None
@@ -95,12 +123,12 @@ def load_dataset_crafted( train_fn, valid_fn="", test_fn="" ):
        print( "Loading training set: " +  train_fn );    
        X_train, y_train, pos_train = load_clarin( train_fn );
        output_size = np.max( y_train ) + 1;          
-       tr_size, layers_cnt, rows_cnt, features_cnt = X_train.shape;
+       tr_size, channels_cnt, rows_cnt, features_cnt = X_train.shape;
        
        output_size = np.max( y_train ) + 1;   
    
        print( "Count of traininig samples  : {0:,d}".format(tr_size) );
-       print( "Count of features per frame : %d x %d x %d " % ( layers_cnt, rows_cnt, features_cnt ) );
+       print( "Count of features per frame : %d x %d x %d " % ( channels_cnt, rows_cnt, features_cnt ) );
        print( "Count of NN outpts          : %d" % output_size );       
     else:
        X_train = None
@@ -108,8 +136,27 @@ def load_dataset_crafted( train_fn, valid_fn="", test_fn="" ):
        pos_train = None         
     
     return X_train, y_train, pos_train, X_val, y_val, pos_val, X_test, y_test, pos_test
-
-def load_dataset_from_bulk( train_fn, valid_fn, test_fn, ctx_width, fraction ):
+    
+# ===========================================================================
+   
+def load_dataset_from_raw( train_fn, valid_fn, test_fn, ctx_width, fraction ):
+    """
+       This function loads train/development/test datasets from "raw" datafiles.
+       Raw datafiles contain frame data obtained directly from feature extraction 
+       procedures. The raw datafile contains data obtained from the whole available 
+       corpus of recorded speech samples. The data are organized in two arrays: 
+       input data array and output data array. Input data array is the (NxM) array 
+       where rows correspond to frames in audio streams and columns correspond to 
+       features extracted from a single frame.
+       The function builds data that can be used as inputs/outputs of trained/tested 
+       NN. The role of the procedure is to:
+       - select the subset of data in a row file corresponding to a fraction specified by 
+         "fraction" parameter;
+       - extend feature vectors of recognizable objects by merging features from adjacent
+         subsequent frames, where the number of concatenated feature vectors is determined
+         by "ctx_width" parameter. This parameters defines "context radius", i.e. the number 
+         of concatenated vectors is equal to 2*ctx_withd+1
+    """
     global rows_cnt;
     global features_cnt;
     global output_size;    
@@ -124,221 +171,24 @@ def load_dataset_from_bulk( train_fn, valid_fn, test_fn, ctx_width, fraction ):
     tr_size, layer_cnt, rows_cnt, features_cnt = X_train.shape;
     output_size = np.max( y_train ) + 1;
     
-    print( "Count of traininig samples  : {0:,d}".format(tr_size) );
+    print( "Count of training samples   : {0:,d}".format(tr_size) );
     print( "Count of features per frame : %d x %d x %d " % ( layer_cnt, rows_cnt, features_cnt ) );
-    print( "Count of NN outpts          : %d" % output_size );
+    print( "Count of NN outputs         : %d" % output_size );
     
     return X_train, y_train, X_val, y_val, X_test, y_test
-
-
-# ##################### Build the neural network model #######################
-# This script supports three types of models. For each one, we define a
-# function that takes a Theano variable representing the input and returns
-# the output layer of a neural network model built in Lasagne.
-
-def build_mlp(input_var=None):
-    # This creates an MLP of two hidden layers of 800 units each, followed by
-    # a softmax output layer of 10 units. It applies 20% dropout to the input
-    # data and 50% dropout to the hidden layers.
-
-    # Input layer, specifying the expected input shape of the network
-    # (unspecified batchsize, 1 channel, 28 rows and 28 columns) and
-    # linking it to the given Theano variable `input_var`, if any:
-    l_in = lasagne.layers.InputLayer(shape=(None, 1, rows_cnt, features_cnt),
-                                     input_var=input_var)
-
-    # Apply 20% dropout to the input data:
-    l_in_drop = lasagne.layers.DropoutLayer(l_in, p=0.2)
-
-    # Add a fully-connected layer of 800 units, using the linear rectifier, and
-    # initializing weights with Glorot's scheme (which is the default anyway):
-    l_hid1 = lasagne.layers.DenseLayer(
-            l_in_drop, num_units=2500,
-            nonlinearity=lasagne.nonlinearities.rectify,
-            W=lasagne.init.GlorotUniform())
-
-    # We'll now add dropout of 50%:
-    l_hid1_drop = lasagne.layers.DropoutLayer(l_hid1, p=0.5)
-
-    # Another 800-unit layer:
-    l_hid2 = lasagne.layers.DenseLayer(
-            l_hid1_drop, num_units=2200,
-            nonlinearity=lasagne.nonlinearities.rectify)
-
-    # 50% dropout again:
-    l_hid2_drop = lasagne.layers.DropoutLayer(l_hid2, p=0.5)
-
-    """
-    # Another 800-unit layer:
-    l_hid3 = lasagne.layers.DenseLayer(
-            l_hid2_drop, num_units=600,
-            nonlinearity=lasagne.nonlinearities.rectify)
-
-    # 50% dropout again:
-    l_hid3_drop = lasagne.layers.DropoutLayer(l_hid3, p=0.2)
-    """
-	    
-    
-    # Finally, we'll add the fully-connected output layer, of 10 softmax units:
-    l_out = lasagne.layers.DenseLayer(
-            l_hid2_drop, num_units=output_size,
-            nonlinearity=lasagne.nonlinearities.softmax)
-
-    # Each layer is linked to its incoming layer(s), so we only need to pass
-    # the output layer to give access to a network in Lasagne:
-    return l_out
-
-
-def build_custom_mlp(input_var=None, depth=2, width=800, drop_input=.2,
-                     drop_hidden=.5):
-    # By default, this creates the same network as `build_mlp`, but it can be
-    # customized with respect to the number and size of hidden layers. This
-    # mostly showcases how creating a network in Python code can be a lot more
-    # flexible than a configuration file. Note that to make the code easier,
-    # all the layers are just called `network` -- there is no need to give them
-    # different names if all we return is the last one we created anyway; we
-    # just used different names above for clarity.
-
-    # Input layer and dropout (with shortcut `dropout` for `DropoutLayer`):
-    network = lasagne.layers.InputLayer(shape=(None, 1, 28, 28),
-                                        input_var=input_var)
-    if drop_input:
-        network = lasagne.layers.dropout(network, p=drop_input)
-    # Hidden layers and dropout:
-    nonlin = lasagne.nonlinearities.rectify
-    for _ in range(depth):
-        network = lasagne.layers.DenseLayer(
-                network, width, nonlinearity=nonlin)
-        if drop_hidden:
-            network = lasagne.layers.dropout(network, p=drop_hidden)
-    # Output layer:
-    softmax = lasagne.nonlinearities.softmax
-    network = lasagne.layers.DenseLayer(network, 10, nonlinearity=softmax)
-    return network
-
-
-def build_cnn(input_var=None):
-    # As a third model, we'll create a CNN of two convolution + pooling stages
-    # and a fully-connected hidden layer in front of the output layer.
-
-    # Input layer, as usual:
-    network = lasagne.layers.InputLayer(shape=(None, layers_cnt, rows_cnt, features_cnt),
-                                        input_var=input_var)
-    # This time we do not apply input dropout, as it tends to work less well
-    # for convolutional layers.
-
-    # Convolutional layer with 32 kernels of size 5x5. Strided and padded
-    # convolutions are supported as well; see the docstring.
-    network = lasagne.layers.Conv2DLayer(
-            network, num_filters=128, filter_size=(11, 7),
-            nonlinearity=lasagne.nonlinearities.LeakyRectify(0.05),
-            W=lasagne.init.GlorotUniform())
-    # Expert note: Lasagne provides alternative convolutional layers that
-    # override Theano's choice of which implementation to use; for details
-    # please see http://lasagne.readthedocs.org/en/latest/user/tutorial.html.
-
-    """
-    # Max-pooling layer of factor 2 in both dimensions:        
-    network = lasagne.layers.MaxPool2DLayer(network, pool_size=(1, 2))
-      
-    # Another convolution with 32 5x5 kernels, and another 2x2 pooling:
-    network = lasagne.layers.Conv2DLayer(
-            network, num_filters=32, filter_size=(3, 5),
-            nonlinearity=lasagne.nonlinearities.rectify)
-    network = lasagne.layers.MaxPool2DLayer(network, pool_size=(2, 2))
-    """
-    
-    # A fully-connected layer of 256 units with 50% dropout on its inputs:
-    network = lasagne.layers.DenseLayer(
-            lasagne.layers.dropout(network, p=.5),
-            num_units=1400,
-            nonlinearity=lasagne.nonlinearities.LeakyRectify(0.01))
-
-    network = lasagne.layers.DenseLayer(
-            lasagne.layers.dropout(network, p=.5),
-            num_units=1400,
-            nonlinearity=lasagne.nonlinearities.LeakyRectify(0.01))
-            
-    network = lasagne.layers.DenseLayer(
-            lasagne.layers.dropout(network, p=.5),
-            num_units=1400,
-            nonlinearity=lasagne.nonlinearities.LeakyRectify(0.01))            
-            
-    network = lasagne.layers.DenseLayer(
-            lasagne.layers.dropout(network, p=.5),
-            num_units=1400,
-            nonlinearity=lasagne.nonlinearities.LeakyRectify(0.01))   
-            
-    network = lasagne.layers.DenseLayer(
-            lasagne.layers.dropout(network, p=.5),
-            num_units=1400,
-            nonlinearity=lasagne.nonlinearities.LeakyRectify(0.01))              
-           
-    network = lasagne.layers.DenseLayer(
-            lasagne.layers.dropout(network, p=.5),
-            num_units=1400,
-            nonlinearity=lasagne.nonlinearities.LeakyRectify(0.01))   
-            
-    network = lasagne.layers.DenseLayer(
-            lasagne.layers.dropout(network, p=.5),
-            num_units=1400,
-            nonlinearity=lasagne.nonlinearities.LeakyRectify(0.01))              
-           
-    network = lasagne.layers.DenseLayer(
-            lasagne.layers.dropout(network, p=.5),
-            num_units=1400,
-            nonlinearity=lasagne.nonlinearities.LeakyRectify(0.01))  
-            
-    """
-    network = lasagne.layers.DenseLayer(
-            lasagne.layers.dropout(network, p=.5),
-            num_units=2500,
-            nonlinearity=lasagne.nonlinearities.LeakyRectify(0.01))
-    """
-    
-    # And, finally, the 10-unit output layer with 50% dropout on its inputs:
-    network = lasagne.layers.DenseLayer(
-            lasagne.layers.dropout(network, p=.2),
-            num_units=output_size,
-            nonlinearity=lasagne.nonlinearities.softmax)
-
-    return network
-
-
-# ############################# Batch iterator ###############################
-# This is just a simple helper function iterating over training data in
-# mini-batches of a particular size, optionally in random order. It assumes
-# data is available as numpy arrays. For big datasets, you could load numpy
-# arrays as memory-mapped files (np.load(..., mmap_mode='r')), or write your
-# own custom data iteration function. For small datasets, you can also copy
-# them to GPU at once for slightly improved performance. This would involve
-# several changes in the main program, though, and is not demonstrated here.
-# Notice that this function returns only mini-batches of size `batchsize`.
-# If the size of the data is not a multiple of `batchsize`, it will not
-# return the last (remaining) mini-batch.
-
-def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
-    assert len(inputs) == len(targets)
-    if shuffle:
-        indices = np.arange(len(inputs))
-        np.random.shuffle(indices)
-    for start_idx in range(0, len(inputs) - batchsize + 1, batchsize):
-        if shuffle:
-            excerpt = indices[start_idx:start_idx + batchsize]
-        else:
-            excerpt = slice(start_idx, start_idx + batchsize)
-        yield inputs[excerpt], targets[excerpt]
-
-        
-# ############################# Batch iterator ###############################
-# This is a function that prepares data set where trained NN autputs are gathered
-# so that it can be used as the input to 2nd order NN. The data are prepared for 
-# train,validation and test sets. The format is analogous as in teh case of
-# primary input data.
+   
+# ===========================================================================
 
 def prepare_2nd_order_data( X_data, y_data, L, src_fname, nnout_fn, stride=1 ):
+    """
+       This is a function that prepares data set where trained NN outputs are gathered
+       so that it can be used as the input to 2nd order NN. The data are prepared for 
+       train,validation and test sets. The format is analogous as in the case of
+       primary input data.
+    """
+
     print ( "Building 2nd order features: {0}".format(src_fname) )
-    print( "   Recognizing on trainining set" );
+    print( "   Recognizing on training set" );
     
     output_size = np.max( y_data ) + 1;
     tr_size, chan_cnt, whole_ctx, ft_sublen = X_data.shape
@@ -377,8 +227,7 @@ def prepare_2nd_order_data( X_data, y_data, L, src_fname, nnout_fn, stride=1 ):
             if (( ctx >= -2) and ( ctx <= 2)):	
                 outputs_avg[pos] = outputs_avg[pos] + (whole_ctx_rev * all_outputs[src_pos])
             all_outputs_ext[pos][0][lin_pos] = all_outputs[src_pos]
-            lin_pos = lin_pos + 1                
-                   
+            lin_pos = lin_pos + 1                                   
         
     print( "   Storing in a file" );            
     in_file = src_fname;
@@ -386,20 +235,20 @@ def prepare_2nd_order_data( X_data, y_data, L, src_fname, nnout_fn, stride=1 ):
     out_file = t[0] + ".2nd" + t[1]
     print( "   Storing in a file: " + out_file );  
     f_out = open( out_file, "wb" );        
-    np.savez( f_out, a=all_outputs_ext, b=y_data, c=L );     
-        
+    np.savez( f_out, a=all_outputs_ext, b=y_data, c=L );             
     
     del all_outputs
     del all_outputs_ext
 
     return outputs_avg
-
-
-
-# ############################################################################
-# This function prepares pairs (y_recognized, y_expected) for all testing objects
+    
+# ===========================================================================
 
 def prepare_reco_pairs( X_data, y_data, nnout_fn, batch_size=500 ):
+    """
+       This function prepares pairs (y_recognized, y_expected) for 
+       all testing objects
+    """
     y_reco = np.zeros( len(y_data), dtype=np.int16);
     opos = 0;
     for batch in iterate_minibatches(X_data, y_data, batch_size, shuffle=False):
@@ -410,38 +259,170 @@ def prepare_reco_pairs( X_data, y_data, nnout_fn, batch_size=500 ):
     return zip( y_reco, y_data)
     
     
-# ############################## Main program ################################
-# Everything else will be handled in our main program now. We could pull out
-# more functions to better separate the code, but it wouldn't make it any
-# easier to read.
+# ====================================================================================
+# ====================================================================================
+# Functions that build NN models. 
+#    These scripts supports two types of models: simple MLP and NN with the single 
+#    convolution layer. For each one, we define a function that takes a Theano 
+#    variable representing the input and returns the output layer of a neural network 
+#    model built in Lasagne.
+# ====================================================================================
+# ====================================================================================
 
-def main(model='mlp', num_epochs=500):
+def build_mlp(input_var=None):
+    """
+       This function is an adaptation of the code borrowed from Lasagne
+       usage examples (https://github.com/Lasagne/Lasagne/blob/master/examples/mnist.py)
+       This creates an MLP of two hidden layers, followed by a softmax output layer 
+       with the number of outputs specified by "outpout_size" global variable.  
+       It applies 20% dropout to the input data and 50% dropout to the hidden layers
+       Number of channels and the dimensions of channel data are determined by global 
+       variables: rows_cnt, features_cnt.
+    """
 
-    print( "Running noniterative test" );
-    use_bulk = False;
+    # Input layer, specifying the expected input shape of the network
+    # (unspecified batchsize, 1 channel) and linking it to the given Theano variable:
+    # `input_var`, if any:
+    l_in = lasagne.layers.InputLayer(shape=(None, 1, rows_cnt, features_cnt),
+                                     input_var=input_var)
+
+    # Apply 20% dropout to the input data:
+    l_in_drop = lasagne.layers.DropoutLayer(l_in, p=0.2)
+
+    # Add a fully-connected layer, using the linear rectifier, and
+    # initializing weights with Glorot's scheme (which is the default anyway):
+    l_hid1 = lasagne.layers.DenseLayer(
+            l_in_drop, num_units=2500,
+            nonlinearity=lasagne.nonlinearities.rectify,
+            W=lasagne.init.GlorotUniform())
+
+    # We'll now add dropout of 50%:
+    l_hid1_drop = lasagne.layers.DropoutLayer(l_hid1, p=0.5)
+
+    # Another hidden layer:
+    l_hid2 = lasagne.layers.DenseLayer(
+            l_hid1_drop, num_units=2200,
+            nonlinearity=lasagne.nonlinearities.rectify)
+
+    # 50% dropout again:
+    l_hid2_drop = lasagne.layers.DropoutLayer(l_hid2, p=0.5)   
+   
+    # Finally, we'll add the fully-connected output layer of softmax units:
+    l_out = lasagne.layers.DenseLayer(
+            l_hid2_drop, num_units=output_size,
+            nonlinearity=lasagne.nonlinearities.softmax)
+
+    # Each layer is linked to its incoming layer(s), so we only need to pass
+    # the output layer to give access to a network in Lasagne:
+    return l_out
+
+# =================================================================
+
+def build_cnn(input_var=None, num_hidden=3, num_units=2800):
+    """
+       Function that builds the model of the convolutional NN
+    """
+
+    # Input layer, as usual:
+    network = lasagne.layers.InputLayer(shape=(None, channels_cnt, rows_cnt, features_cnt),
+                                        input_var=input_var)
+
+    # Convolutional layer with 128 kernels of size 11,7. 
+    network = lasagne.layers.Conv2DLayer(
+            network, num_filters=128, filter_size=(11, 7),
+            nonlinearity=lasagne.nonlinearities.LeakyRectify(0.05),
+            W=lasagne.init.GlorotUniform())
+    
+    # A fully-connected layer with 50% dropout on its inputs:
+    for i in range( num_hidden )
+        network = lasagne.layers.DenseLayer(
+                lasagne.layers.dropout(network, p=.5),
+                num_units=num_units,
+                nonlinearity=lasagne.nonlinearities.LeakyRectify(0.01))
+    
+    # And, finally, the output layer with 20% dropout on its inputs:
+    network = lasagne.layers.DenseLayer(
+            lasagne.layers.dropout(network, p=.2),
+            num_units=output_size,
+            nonlinearity=lasagne.nonlinearities.softmax)
+
+    return network
+
+# ====================================================================================
+# ====================================================================================
+# Batch iterator 
+# ====================================================================================
+# ====================================================================================
+
+def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
+    """
+       This is just a simple helper function iterating over training data in
+       mini-batches of a particular size, optionally in random order. It assumes
+       data is available as numpy arrays. For big datasets, you could load numpy
+       arrays as memory-mapped files (np.load(..., mmap_mode='r')), or write your
+       own custom data iteration function. For small datasets, you can also copy
+       them to GPU at once for slightly improved performance. This would involve
+       several changes in the main program, though, and is not demonstrated here.
+       Notice that this function returns only mini-batches of size `batchsize`.
+       If the size of the data is not a multiple of `batchsize`, it will not
+       return the last (remaining) mini-batch.
+    """
+    assert len(inputs) == len(targets)
+    if shuffle:
+        indices = np.arange(len(inputs))
+        np.random.shuffle(indices)
+    for start_idx in range(0, len(inputs) - batchsize + 1, batchsize):
+        if shuffle:
+            excerpt = indices[start_idx:start_idx + batchsize]
+        else:
+            excerpt = slice(start_idx, start_idx + batchsize)
+        yield inputs[excerpt], targets[excerpt]
+
+        
+# ====================================================================================
+# ====================================================================================
+# main() function
+#    Everything else will be handled in our main program now. We could pull out
+#    more functions to better separate the code, but it wouldn't make it any
+#    easier to read.
+# ====================================================================================
+# ====================================================================================
+
+def main( argv ):
+    """
+       The whole program trains NN and tests its performance
+    """
+    
+    model = argv[1]
+    num_epochs = int(argv[2])
+    train_fname = argv[3], 
+    valid_fname = argv[4], 
+    test_fname  = argv[5]    
+    
+    use_raw = False;
     fraction = 1.0;
     ctx_width = 5;
-    if ( len( sys.argv ) > 6 ):
-        if (sys.argv[6][0] == "B" ):
+    if ( len( argv ) > 6 ):
+       if ( argv[6][0] == "B" ):
             use_bulk = True;
 
-        if ( len( sys.argv ) > 8 ):
-            ctx_width = int( sys.argv[7] );
-            fraction = float( sys.argv[8] ) * 0.01;
+        if ( len( argv ) > 8 ):
+            ctx_width = int( argv[7] );
+            fraction = float( argv[8] ) * 0.01;
             if ( fraction > 1.0 ):
                 fraction = 1.0;    
 
-    # Load the dataset
-                
+    # Load the dataset                
     positional_data_ready = False;
-    if ( use_bulk ):
-       print( "Loading from bulk: context %d   fraction %4.2f" % ( ctx_width, fraction ) );    
-       X_train, y_train, X_val, y_val, X_test, y_test = load_dataset_from_bulk( sys.argv[3], sys.argv[4], sys.argv[5], ctx_width, fraction )
+    if ( use_raw ):
+       print( "Loading from raw data: context %d   fraction %4.2f" % ( ctx_width, fraction ) );    
+       X_train, y_train, X_val, y_val, X_test, y_test = load_dataset_from_bulk( train_fname, valid_fname, 
+                                                                                test_fname, ctx_width, fraction )
     else:
        print( "Loading from preselected sets" );    
-       X_train, y_train, pos_train, X_val, y_val, pos_val, X_test, y_test, pos_test = load_dataset_crafted( sys.argv[3], sys.argv[4], "" )
+       X_train, y_train, pos_train, X_val, y_val, pos_val, X_test, y_test, pos_test = load_dataset_crafted( 
+                                                                                         train_fname, valid_fname, "" )
        positional_data_ready = True;
-
       
     acc_history = [];
     acc_history_avg = [];
@@ -453,10 +434,6 @@ def main(model='mlp', num_epochs=500):
     print("Building model and compiling functions...")
     if model == 'mlp':
         network = build_mlp(input_var)
-    elif model.startswith('custom_mlp:'):
-        depth, width, drop_in, drop_hid = model.split(':', 1)[1].split(',')
-        network = build_custom_mlp(input_var, int(depth), int(width),
-                                   float(drop_in), float(drop_hid))
     elif model == 'cnn':
         network = build_cnn(input_var)
     else:
@@ -548,7 +525,7 @@ def main(model='mlp', num_epochs=500):
            if ( epoch > 0 ) or ( epoch == 0 ):
                np.savez('model.npz', *lasagne.layers.get_all_param_values(network));
                print( "  net saved" );
-        if ( epoch - last_impr > 30 ):
+        if ( epoch - last_impr > 40 ):
            break;          
        
         if ( epoch >= mean_horizon ):
@@ -591,10 +568,8 @@ def main(model='mlp', num_epochs=500):
             plt.savefig( out_file );
             plt.clf()
             plt.cla()
-            plt.close()            
-            
-            
-        
+            plt.close()                        
+                   
     # After training, we compute and print the test error:
     with np.load('model.npz') as f:
         param_values = [f['arr_%d' % i] for i in range(len(f.files))]
@@ -621,8 +596,6 @@ def main(model='mlp', num_epochs=500):
     print("  test loss:\t\t\t{:.6f}".format(test_err / test_batches))
     print("  test accuracy:\t\t{:.2f} %".format(test_acc / test_batches * 100))
     print("  best at iter:\t\t{}".format( last_impr ) );
-
-
        
     # Save accuracy statistics on test data   
     in_file = sys.argv[3];
@@ -637,8 +610,8 @@ def main(model='mlp', num_epochs=500):
         file.write( "  test loss:\t\t\t{:.6f}\n".format(test_err / test_batches) )
         file.write( "  test accuracy:\t\t{:.2f} %\n".format(test_acc / test_batches * 100))    
 
-    return 1
-    
+    # If data determining utterance boundaries are available the prepare datafiles
+    # stacked NNs training    
     if ( positional_data_ready ):  
         stride = 1 
 
@@ -664,34 +637,23 @@ def main(model='mlp', num_epochs=500):
 
         del X_test
         del y_test
-        del pos_test
-
+        del pos_test   
     
-    
-    # Optionally, you could now dump the network weights to a file like this:
-    # np.savez('model.npz', *lasagne.layers.get_all_param_values(network))
-    #
-    # And load them again later on like this:
-    # with np.load('model.npz') as f:
-    #     param_values = [f['arr_%d' % i] for i in range(len(f.files))]
-    # lasagne.layers.set_all_param_values(network, param_values)
-
+# ====================================================================================
+# ====================================================================================
 
 if __name__ == '__main__':
-    if ('--help' in sys.argv) or ('-h' in sys.argv):
-        print("Trains a neural network on MNIST using Lasagne.")
-        print("Usage: %s [MODEL [EPOCHS]]" % sys.argv[0])
+    if ('--help' in sys.argv) or ('-h' in sys.argv) or (len(sys.argv) < 6 ):
+        print("Demo program showing how to use CLARIN_NN dataset for NN training using Lasagne.")
+        print("Usage: %s <model> <epochs> <train_set_file> <devel_set_file> <test_set_file> [B <context> <fraction>]" % sys.argv[0])
         print()
-        print("MODEL: 'mlp' for a simple Multi-Layer Perceptron (MLP),")
-        print("       'custom_mlp:DEPTH,WIDTH,DROP_IN,DROP_HID' for an MLP")
-        print("       with DEPTH hidden layers of WIDTH units, DROP_IN")
-        print("       input dropout and DROP_HID hidden dropout,")
-        print("       'cnn' for a simple Convolutional Neural Network (CNN).")
-        print("EPOCHS: number of training epochs to perform (default: 500)")
+        print("  <model>: 'mlp' for a simple Multi-Layer Perceptron (MLP),")
+        print("           'cnn' for a simple Convolutional Neural Network (CNN).")
+        print("  <epochs>: number of training epochs to perform (default: 500)")
+        print("  <train_set_file> " )
+        print("  <devel_set_file> " )
+        print("  <test_set_file>: dataset files prepared with nn_reshape.py" )
+        print("  <context>:       frame context radius, used only if import from raw dataset ")
+        print("  <fraction>:      percentage of raw train dataset to be used for training ")
     else:
-        kwargs = {}
-        if len(sys.argv) > 1:
-            kwargs['model'] = sys.argv[1]
-        if len(sys.argv) > 2:
-            kwargs['num_epochs'] = int(sys.argv[2])
-        main(**kwargs)
+        main( sys.argv )
