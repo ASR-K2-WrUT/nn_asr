@@ -23,5 +23,5 @@ The Python readable data sets are prepared from raw recorded audio samples commp
 
 The data shape of traininig/development/testing sets is organized as two arrays: for NN input and NN output. NN input 4D array is indexed by the quadruple of indices: (sample_index, slice_index, context_frame_index, feature_index). By "sample" we mean here the recognizable object, in case of phoneme recognition it corresponds to a single frame (extracted from 20ms segment of utterance audio recording). "slices" correspond to various feature types in the feature vector extracted from the single frame. We applied Mel-scale spectral coefficients (MFSC) acquired from the Mel-scale filter bank outputs, together with approximation of its ferst and second time derivatives (usually named: delta nad delta-delta). Filterbank outputs are stores in the first slice while deltas and delta-deltas constiture two remaining slices.
 
-Ver 101.a
+Ver 101.b
 
