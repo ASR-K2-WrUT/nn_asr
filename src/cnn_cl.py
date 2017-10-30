@@ -5,9 +5,10 @@ This source file presents an example how to use the datasets prepared with TIMIT
 acoustic corpora in training and testing neural networks aimed phoneme recognition or
 state probability estimation in HMM-NN hybrid ASR recognition.
 
-This demo is based on the code published as a part of Lasagne tutorial. As in the 
-case of the primary code, it is mainly focused on loading ans usage of ASR datasets
-instead of focusing on writing maximally modular and reusable code. 
+This demo is based on the code published as a part of Lasagne tutorial 
+(https://github.com/Lasagne/Lasagne). As in the case of the primary code, it is mainly 
+focused on loading ans usage of ASR datasets instead of focusing on writing maximally 
+modular and reusable code. 
 
 Dataset building modules compatible with the dataset format used herein can be found 
 at GitHub: https://github.com/ASR-K2-WrUT/nn_asr
@@ -257,6 +258,48 @@ def prepare_reco_pairs( X_data, y_data, nnout_fn, batch_size=500 ):
         y_reco[opos:opos+batch_size] = np.argmax(outputs, axis=1 );
         opos = opos + batch_size
     return zip( y_reco, y_data)
+
+# ===========================================================================
+
+def create_traininig_plots( acc_history, acc_history_avg, 
+                            train_loss_history, test_loss_history, 
+                            acc_plot_fname, loss_plot_fname ):
+    """
+       This function creates plots of recognition accuracy
+       and loss value after subsequent epochs of training. 
+       Accuracy is evaluated usin development dataset
+    """
+
+    xpos = np.argmax( acc_history )             
+    plt.figure(figsize=[6,6])
+    plt.grid( True )
+    plt.ylabel( "Accuracy" )
+    plt.xlabel( "Epochs" )
+    plt.plot( acc_history, color = 'r', label="Acc" )
+    plt.plot( acc_history_avg, color = 'b', label= "Avg_acc" )
+    plt.legend()
+    plt.axvline(x=xpos, color="black", ls="dashed", ymax=acc_history[xpos] )           
+    plt.savefig( acc_plot_fname )
+    plt.clf()
+    plt.cla()
+    plt.close()
+    
+    plt.figure(figsize=[6,6])
+    plt.grid( True )
+    plt.ylabel( "Loss" )
+    plt.xlabel( "Epochs" )
+    plt.plot( train_loss_history, color = 'r', label="Train loss" )
+    plt.plot( test_loss_history, color = 'b', label= "Validation loss" )
+    plt.legend();
+    xpos = np.argmin( train_loss_history )
+    plt.axvline(x=xpos, color = 'r', ls="dashed" )            
+    xpos = np.argmin( test_loss_history )
+    plt.axvline(x=xpos, color = 'b', ls="dashed" )  
+    
+    plt.savefig( loss_plot_fname );
+    plt.clf()
+    plt.cla()
+    plt.close()                        
     
     
 # ====================================================================================
@@ -334,7 +377,7 @@ def build_cnn(input_var=None, num_hidden=3, num_units=2800):
             W=lasagne.init.GlorotUniform())
     
     # A fully-connected layer with 50% dropout on its inputs:
-    for i in range( num_hidden )
+    for i in range( num_hidden ):
         network = lasagne.layers.DenseLayer(
                 lasagne.layers.dropout(network, p=.5),
                 num_units=num_units,
@@ -398,12 +441,16 @@ def main( argv ):
     train_fname = argv[3], 
     valid_fname = argv[4], 
     test_fname  = argv[5]    
+
+    t = pth.splitext( train_fname );
+    loss_plot_fname = t[0] + ".loss.png"
+    acc_plot_fname = t[0] + ".acc.png"
     
     use_raw = False;
     fraction = 1.0;
     ctx_width = 5;
     if ( len( argv ) > 6 ):
-       if ( argv[6][0] == "B" ):
+        if ( argv[6][0] == "B" ):
             use_bulk = True;
 
         if ( len( argv ) > 8 ):
@@ -415,17 +462,15 @@ def main( argv ):
     # Load the dataset                
     positional_data_ready = False;
     if ( use_raw ):
-       print( "Loading from raw data: context %d   fraction %4.2f" % ( ctx_width, fraction ) );    
-       X_train, y_train, X_val, y_val, X_test, y_test = load_dataset_from_bulk( train_fname, valid_fname, 
-                                                                                test_fname, ctx_width, fraction )
+        print( "Loading from raw data: context %d   fraction %4.2f" % ( ctx_width, fraction ) );    
+        X_train, y_train, X_val, y_val, X_test, y_test = load_dataset_from_bulk( train_fname, valid_fname, 
+                                                                                 test_fname, ctx_width, fraction )
     else:
-       print( "Loading from preselected sets" );    
-       X_train, y_train, pos_train, X_val, y_val, pos_val, X_test, y_test, pos_test = load_dataset_crafted( 
-                                                                                         train_fname, valid_fname, "" )
-       positional_data_ready = True;
+        print( "Loading from preselected sets" );    
+        X_train, y_train, pos_train, X_val, y_val, pos_val, X_test, y_test, pos_test = load_dataset_crafted( 
+                                                                                       train_fname, valid_fname, "" )
+        positional_data_ready = True;
       
-    acc_history = [];
-    acc_history_avg = [];
     # Prepare Theano variables for inputs and targets
     input_var = T.tensor4('inputs')
     target_var = T.ivector('targets')
@@ -437,7 +482,7 @@ def main( argv ):
     elif model == 'cnn':
         network = build_cnn(input_var)
     else:
-        print("Unrecognized model type %r." % model)
+        print("Unrecognised model type %r." % model)
         return
 
     # Create a loss expression for training, i.e., a scalar objective we want
@@ -450,19 +495,17 @@ def main( argv ):
     # Create update expressions for training, i.e., how to modify the
     # parameters at each training step. Here, we'll use Stochastic Gradient
     # Descent (SGD) with Nesterov momentum, but Lasagne offers plenty more.
-    params = lasagne.layers.get_all_params(network, trainable=True)
-    
+    params = lasagne.layers.get_all_params(network, trainable=True)    
     updates = lasagne.updates.nesterov_momentum(
               loss, params, learning_rate=0.01, momentum=0.9)
-    # updates = lasagne.updates.adam(loss, params)
     
     # Create a loss expression for validation/testing. The crucial difference
     # here is that we do a deterministic forward pass through the network,
     # disabling dropout layers.
     test_prediction = lasagne.layers.get_output(network, deterministic=True)
-    test_loss = lasagne.objectives.categorical_crossentropy(test_prediction,
-                                                            target_var)
+    test_loss = lasagne.objectives.categorical_crossentropy( test_prediction, target_var )
     test_loss = test_loss.mean()
+    
     # As a bonus, also create an expression for the classification accuracy:
     test_acc = T.mean(T.eq(T.argmax(test_prediction, axis=1), target_var),
                       dtype=theano.config.floatX)
@@ -473,17 +516,21 @@ def main( argv ):
 
     # Compile a second function computing the validation loss and accuracy:
     val_fn = theano.function([input_var, target_var], [test_loss, test_acc], allow_input_downcast=True)
-
     nnout_fn = theano.function( [input_var], test_prediction, allow_input_downcast=True)
+        
+    # Initialize sequences of loss and accuracy values in subsequent epochs,
+    # which will be used to create plots in png files
+    train_loss_history = [];
+    test_loss_history = [];    
+    acc_history = [];
+    acc_history_avg = [];   
+    acc_mean = np.zeros( mean_horizon );
     
     # Finally, launch the training loop.
     print("Starting training...")
     max_acc = 0.0;
-    last_impr = 0;
-    acc_mean = np.zeros( mean_horizon );
+    last_impr = 0;   
     
-    train_loss_history = [];
-    test_loss_history = [];    
     # We iterate over epochs:
     for epoch in range(num_epochs):
         # In each epoch, we do a full pass over the training data:
@@ -518,6 +565,7 @@ def main( argv ):
         print("  mean accuracy:      \t\t{:.2f} %".format(
             np.mean(acc_mean) * 100))
 
+        # Save the NN trained so far if observable improvement occurred    
         if ( val_result > max_acc + 0.0001 ):
            print ( "  improvement by %5.2f" % ( (val_result - max_acc) *100,) );        
            max_acc = val_result;
@@ -525,64 +573,37 @@ def main( argv ):
            if ( epoch > 0 ) or ( epoch == 0 ):
                np.savez('model.npz', *lasagne.layers.get_all_param_values(network));
                print( "  net saved" );
+               
+        # terminate training if no improvement achieved for a long time       
         if ( epoch - last_impr > 40 ):
            break;          
-       
-        if ( epoch >= mean_horizon ):
-            acc_history.append( val_result * 100 );
-            acc_history_avg.append( np.mean(acc_mean) * 100 );
 
-            train_loss_history.append( train_err / train_batches );
-            test_loss_history.append( val_err / val_batches );
-            
-            xpos = np.argmax( acc_history )             
-            plt.figure(figsize=[6,6])
-            plt.grid( True );
-            plt.ylabel( "Accuracy" );
-            plt.xlabel( "Epochs" );
-            plt.plot( acc_history, color = 'r', label="Acc" );
-            plt.plot( acc_history_avg, color = 'b', label= "Avg_acc" );
-            plt.legend();
-            plt.axvline(x=xpos, color="black", ls="dashed", ymax=acc_history[xpos] )           
-            t = pth.splitext( sys.argv[3] );
-            out_file = t[0] + ".acc.png"
-            plt.savefig( out_file );
-            plt.clf()
-            plt.cla()
-            plt.close()
-            
-            plt.figure(figsize=[6,6])
-            plt.grid( True );
-            plt.ylabel( "Loss" );
-            plt.xlabel( "Epochs" );
-            plt.plot( train_loss_history, color = 'r', label="Train loss" );
-            plt.plot( test_loss_history, color = 'b', label= "Validation loss" );
-            plt.legend();
-            xpos = np.argmin( train_loss_history )
-            plt.axvline(x=xpos, color = 'r', ls="dashed" )            
-            xpos = np.argmin( test_loss_history )
-            plt.axvline(x=xpos, color = 'b', ls="dashed" )  
-            
-            t = pth.splitext( sys.argv[3] );
-            out_file = t[0] + ".loss.png"
-            plt.savefig( out_file );
-            plt.clf()
-            plt.cla()
-            plt.close()                        
+        # Update training result plots           
+        if ( epoch >= mean_horizon ):
+            acc_history.append( val_result * 100 )
+            acc_history_avg.append( np.mean(acc_mean) * 100 )
+
+            train_loss_history.append( train_err / train_batches )
+            test_loss_history.append( val_err / val_batches )
+            create_traininig_plots( acc_history, acc_history_avg, 
+                                    train_loss_history, test_loss_history, 
+                                    acc_plot_fname, loss_plot_fname )                     
                    
     # After training, we compute and print the test error:
     with np.load('model.npz') as f:
         param_values = [f['arr_%d' % i] for i in range(len(f.files))]
     lasagne.layers.set_all_param_values(network, param_values)    
 
+    # Make room for test data
     del X_val
     del y_val
     del pos_val
     
     X_train_dummy, y_train_dummy, pos_train_dummy, \
         X_val_dummy, y_val_dummy, pos_val_dummy, \
-        X_test, y_test, pos_test = load_dataset_crafted( "", "", sys.argv[5] )    
+        X_test, y_test, pos_test = load_dataset_crafted( "", "", train_fname )    
     
+    # Evaluate error on test dataset
     test_err = 0
     test_acc = 0
     test_batches = 0
@@ -598,41 +619,55 @@ def main( argv ):
     print("  best at iter:\t\t{}".format( last_impr ) );
        
     # Save accuracy statistics on test data   
-    in_file = sys.argv[3];
+    in_file = train_fname;
     t = pth.splitext( in_file );
     out_file = t[0] + ".rep.txt"
     results = prepare_reco_pairs( X_test, y_test, nnout_fn, batch_size=500 );
     asr.save_stats( asr.conf_mtr( results ), out_file, phone_list_file );       
-    
+
+    # Append the final accuracy to the common report file.    
     out_file = "test_history.rep.txt"
     with open(out_file, "a") as file:
-        file.write( "Experiment: {} {} {}\n".format( sys.argv[3], sys.argv[4], sys.argv[5] ) )
+        file.write( "Experiment: {} {} {}\n".format( train_fname, valid_fname, test_fname ) )
         file.write( "  test loss:\t\t\t{:.6f}\n".format(test_err / test_batches) )
         file.write( "  test accuracy:\t\t{:.2f} %\n".format(test_acc / test_batches * 100))    
 
-    # If data determining utterance boundaries are available the prepare datafiles
-    # stacked NNs training    
+    # If data determining utterance boundaries are available then prepare datafiles
+    # for stacked NNs training. Stacked NN is a sequence of NNs where outputs of one NN are used as 
+    # inputs to the next NN. Each NN is the stack is trained in order to correctly solve the underlying
+    # classification problem.    
     if ( positional_data_ready ):  
+    
+        # Context width at the next stage can be controlled by specifying the stride. If stride==n
+        # then every n-th frame classification result (output of NN applied at the previous stage)
+        # is used in forming the input vector for next stage NN. IN this way temporal context width
+        # can be extended without enlarfing the input vector size.
         stride = 1 
 
-        prepare_2nd_order_data( X_train, y_train, pos_train, sys.argv[3], nnout_fn );
+        prepare_2nd_order_data( X_train, y_train, pos_train, train_fname, nnout_fn );
         del X_train
         del y_train
         del pos_train
 
+        # We are swapping datasets in order to better utilize available CPU RAM
         X_train_dummy, y_train_dummy, pos_train_dummy, X_val, y_val, pos_val, X_test_dummy, \
-            y_test_dummy, pos_test_dummy = load_dataset_crafted( "", sys.argv[4], "" )
-        prepare_2nd_order_data( X_val, y_val, pos_val, sys.argv[4], nnout_fn, stride );
+            y_test_dummy, pos_test_dummy = load_dataset_crafted( "", valid_fname, "" )
+        prepare_2nd_order_data( X_val, y_val, pos_val, valid_fname, nnout_fn, stride );
         del X_val
         del y_val
         del pos_val
         
         X_train_dummy, y_train_dummy, pos_train_dummy, X_val_dummy, y_val_dummy, pos_val_dummy, \
-            X_test, y_test, pos_test = load_dataset_crafted( "", "", sys.argv[5] )
-        outputs_avg = prepare_2nd_order_data( X_test,  y_test, pos_test, sys.argv[5], nnout_fn, stride );
+            X_test, y_test, pos_test = load_dataset_crafted( "", "", test_fname )
+        outputs_avg = prepare_2nd_order_data( X_test,  y_test, pos_test, test_fname, nnout_fn, stride );
+        
+        # Adjacent frames often are labelled with the same phoneme, so the expected NN outputs for 
+        # adjacent frames should also be similar. Averaging NN outputs over adjacent frames may reduce
+        # erroneous outliers. We use averages NN outputs instead of actual NN outputs and perform
+        # classification using averages.
         test_acc_avg = np.mean(np.equal(np.argmax(outputs_avg, axis=1), y_test) ) * 100.0
         with open(out_file, "a") as file:
-           print ( "Accuracy by everage: %6.2f" % test_acc_avg )	
+           print ( "Accuracy by averaged : %6.2f" % test_acc_avg )	
            file.write("  test averaged:\t\t{:.2f} %\n".format( test_acc_avg	) )
 
         del X_test
@@ -649,7 +684,7 @@ if __name__ == '__main__':
         print()
         print("  <model>: 'mlp' for a simple Multi-Layer Perceptron (MLP),")
         print("           'cnn' for a simple Convolutional Neural Network (CNN).")
-        print("  <epochs>: number of training epochs to perform (default: 500)")
+        print("  <epochs>: number of training epochs to perform ")
         print("  <train_set_file> " )
         print("  <devel_set_file> " )
         print("  <test_set_file>: dataset files prepared with nn_reshape.py" )
