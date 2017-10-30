@@ -21,4 +21,5 @@ Defining acoustic contex of a frame makes it possible to improve accuracy of pho
 
 The Python readable data sets are prepared from raw recorded audio samples commplemented with its ortographic annotation. The datasets are stored as saved numpy arrays, so it can be read and used in any code written in Python.
 
-Ver 5.0
+Ver 10
+
