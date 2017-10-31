@@ -603,7 +603,7 @@ def main( argv ):
         param_values = [f['arr_%d' % i] for i in range(len(f.files))]
     lasagne.layers.set_all_param_values(network, param_values)    
 
-    # Make room for test data
+    # Make room for test data and load it
     del X_val
     del y_val
     del pos_val
