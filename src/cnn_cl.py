@@ -31,11 +31,20 @@ import asr
 import matplotlib.pyplot as plt
 from lasagne.nonlinearities import LeakyRectify
 
+
+# Dimensionality of input data - set based on tensor shape read from the input trainset file
 rows_cnt = -1;
 channels_cnt = -1;
 features_cnt = -1;
+
+# Number of classes equl to the number of NN outputs
 output_size = -1;
+
+# The sength of the subsequence of achieved accuracies 
+# taken to compute smoothed average falu presented in plots
 mean_horizon = 5;
+
+# Name of phoneme list file - used to prepare recognition result statistics
 phone_list_file = "all_phones_grp.txt"
 
 
