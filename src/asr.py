@@ -1,3 +1,7 @@
+"""
+   This file contains helper functions used in dataset preparation for ASR 
+   experiments.
+"""
 import numpy as np
 import sys
 import re
@@ -9,8 +13,15 @@ from random import random, seed
 from time import time
 from tsp_solver import greedy_numpy
 
+# =============================================================================
+# =============================================================================
+# Global variables
+# =============================================================================
+# =============================================================================
+
 FEATURE_COUNT = -1;
-# Classes include unknown UNK phonem which is represented by the last elem of output vector
+# Classes include unknown UNK phonem which is represented by the last elem 
+# of teh output vector
 CLASS_COUNT = -1;
 # Constants definition
 EOU_TAG = "****";
@@ -18,92 +29,19 @@ FREQ=16000
 # number of frames per sec
 FRAME_RATE = 100
 
+# index in recognizable object arrays
 current_af_pos = 0;
+
+# phoneme lookup data for phoneme reordering
 phone_lookup_fn = "phone_lookup.txt"
 
-# ================================================================
 
-def getFeatureCnt( fname ):
-    """
-        Detect actual feature per frame count from MFSC text file.
-        It is assumed that each frame is represented by single line in mfsc file
-    """ 
-    f = open( fname, "rt" );
-    line = f.readline();
-    line = line.rstrip();
-    line = line.lstrip();
-    elems = re.split( "\ +", line );
-    f.close();
-    return len( elems );
-
-# ================================================================
-
-def getClassGrpCount( cls_grp_fname ):
-    """
-        Reads class cluster count (# of NN oputpus ) from phoneme cluster 
-        file. Each cluster is a nonempty line in cluster file. It is also assumed
-        there there is UNK phoneme not directly represented in cluster file,
-        therefore actual number of clusters is increased by 1.
-    """
-    cls_cnt = 0;
-    with open( fname, "rt" ) as f:
-        for line in f:           
-            line = line.rstrip();
-            line = line.lstrip();
-            elems = re.split( "\ +", line );
-            if ( len(elems) > 0 ):
-               cls_cnt = cls_cnt + 1;
-    return len( cls_cnt + 1 );
-
-# ================================================================
-
-def getClassCnt( fname ):
-    """"
-       Detect actual class count from clss file. The class count is 
-       derived from the number of tokens in a single clss file line, where
-       the number of tokens is equal to the number of class plus 2
-    """
-    f = open( fname, "rt" );
-    line = f.readline();
-    line = line.rstrip();
-    line = line.lstrip();
-    elems = re.split( "\ +", line );
- 
-    return len( elems) - 2 ;
-
-# ========================================================================================  
-    
-def process_utter( all_features, all_classes, features, classes, ctx, fraction, max_datasize  ):
-
-   global current_af_pos;
-   
-   frm_cnt = len(features )
-   rows_cnt = 2*ctx + 1;
-   dst_f_len = asr.FEATURE_COUNT * ( rows_cnt );
-   layer_size = asr.FEATURE_COUNT/3
-   for i in range( frm_cnt ):
-      # if ( np.random.uniform() > fraction ):
-      #   continue;
-      lin_pos = i - ctx;      
-      for dst_pos in range( rows_cnt ):
-         pos = max( lin_pos, 0 );
-         pos = min( pos, frm_cnt - 1 );
-         # all_features[ current_af_pos, 0, dst_pos ] = features[pos]    
-         all_features[ current_af_pos, 0, dst_pos ] = features[pos][0:layer_size]         
-         all_features[ current_af_pos, 1, dst_pos ] = features[pos][layer_size:2*layer_size]
-         all_features[ current_af_pos, 2, dst_pos ] = features[pos][2*layer_size:3*layer_size]         
-         lin_pos = lin_pos + 1;
-         
-      all_classes[ current_af_pos ] = np.argmax(classes[i]);
-      current_af_pos = current_af_pos + 1;
-      if ( current_af_pos >= max_datasize ):
-         break;
-      
-   return current_af_pos;
+# =============================================================================
+# =============================================================================
+# Data loading functions
+# =============================================================================
+# =============================================================================  
           
-
-# ========================================================================================     
-           
 def load_utters( in_file ):   
     """ Reads two numpy arrays containinig features and vectorized classses per frame
         Features are aggregated by utters, so both arrays are:
@@ -111,9 +49,9 @@ def load_utters( in_file ):
         classes array is organized in the same way
     """    
     data = np.load( in_file );
-    return [ data['a'], data['b'] ];          
-
-# ========================================================================================     
+    return [ data['a'], data['b'] ];    
+    
+# =============================================================================
     
 def prepare_for_lasagne( all_features, all_classes ):
     """" 
@@ -123,7 +61,7 @@ def prepare_for_lasagne( all_features, all_classes ):
     data = ( all_features, all_classes )
     return ( data );   
     
-# ========================================================================================     
+# =============================================================================
     
 def loadRawData( in_file, ctx_width=5, fraction=1.0 ):
     """ Loads raw data and reshapes it by merging sequences of features in subsequent
@@ -151,16 +89,18 @@ def loadRawData( in_file, ctx_width=5, fraction=1.0 ):
 
     current_af_pos = 0;
 
-    # all_features - matrix containing all extended features - rows are recognizables, columns are individual features
-    # all_features = np.zeros( (max_datasize, 1, 2*ctx_width+1, asr.FEATURE_COUNT ) );
+    # all_features - matrix containing all extended features - rows are recognizables, 
+    #                columns are individual features
     all_features = np.zeros( (max_datasize, 3, 2*ctx_width+1, asr.FEATURE_COUNT/3 ) );
    
-    # all_classes - matrix containing 1-of-n NN woutpus - rows are recognizables, columns are individual outputs
+    # all_classes - matrix containing 1-of-n NN woutpus - rows are recognizables, 
+    #               columns are individual outputs
     all_classes  = np.zeros( max_datasize, dtype=np.int32 );
    
-    # ===============================================================================================
-    # Process subsequent utterances by extending feature vectors and selecting extended rows randomly
-    # ===============================================================================================
+    # =========================================================================
+    # Process subsequent utterances by extending feature vectors and selecting 
+    # extended rows randomly
+    # =========================================================================
     for i in range( len(features) ):
         # create extended feature vectors 
         if ( np.random.uniform() > fraction ):
@@ -175,13 +115,13 @@ def loadRawData( in_file, ctx_width=5, fraction=1.0 ):
     return all_features, all_classes
           
           
-# ================================================================
+# =============================================================================
 
 def clipLine( line ):    
     line = line.rstrip();
     return line.lstrip();
     
-# ================================================================
+# =============================================================================
 
 def frms2hrs( frm_cnt ):    
     hr = 0;
@@ -198,7 +138,7 @@ def frms2hrs( frm_cnt ):
     dur_str = "%02dh:%02dm:%05.2fs" % ( hrs, mins, sec );
     return ( hrs, mins, sec, dur_str );
 
-# ================================================================
+# =============================================================================
 
 def load_nn_data( fname ):   
     f_in = open( fname, "rb" );
@@ -206,6 +146,8 @@ def load_nn_data( fname ):
     f_in.close();
     return data;
 
+# =============================================================================
+    
 def load_nn_data_out_plain( fname ):   
     f_in = open( fname, "rb" );
     data = pickle.load( f_in );
@@ -217,7 +159,7 @@ def load_nn_data_out_plain( fname ):
         mdata[i] = ( din, int(dsout) );
     return data;
 
-# ================================================================
+# =============================================================================
 
 def devectorize( data ):
     max_val = -10000.0;
@@ -228,18 +170,35 @@ def devectorize( data ):
             max_val = data[i];
     return pos;
 
-# ================================================================
+    
+# =============================================================================
+# =============================================================================
+# Input/output data analysis functions
+# =============================================================================
+# =============================================================================
 
 def get_stats( vect_data ):
+    """
+       Finds number of each class occurrence in the dataset. Input is the 
+       array of NN outputs. Output is the vector where each element is the 
+       number of occurrences of the correpsonding class.
+    """
     cls_cnt = len( vect_data[0][1] );
     np.zeros( cls_cnt, dtype=np.int32 );
     outs = [ d[1].reshape( cls_cnt ) for d in vect_data ];
     stats = np.sum( outs, axis=0 );
     return stats;
 
-# ================================================================
+# =============================================================================
     
 def cls_stat( vect_data ):
+    """
+       Finds number and relative frequency of each class occurrence in the 
+       dataset. Input is the array of NN outputs. Output is the vectors of 
+       pairs of two values:
+       - absolute class occurrence counts
+       - relative frequency of a class 
+    """
     cls_cnt = len( vect_data[0][1] );
     all_cls = [ d[1].reshape( cls_cnt ) for d in vect_data ];
     all_cls_np = np.array( all_cls );
@@ -248,9 +207,12 @@ def cls_stat( vect_data ):
     cls_stat_rel = cls_stat / float( obj_cnt );
     return zip( cls_stat, cls_stat_rel );
 
-# ================================================================
+# =============================================================================
     
 def cls_stat_save( stats, fname ):
+    """
+       Stores class histogram created by slc_stat function in a file.
+    """
     f = open( fname, "wt ");
     sum_abs = 0; sum_rel = 0.0;
     for i in range( len(stats) ):       
@@ -262,33 +224,34 @@ def cls_stat_save( stats, fname ):
     f.write( "\n   %6d  %6.3f \n" % ( sum_abs, sum_rel) );    
     f.close();   
     
-# ================================================================
+# =============================================================================
 
 def ft2histo( vect_data ):
+    """
+       Finds and prints ranges of feature values and their percentiles
+    """
     ft_cnt = len( vect_data[0][0] );
 
     # find min/max of features
     all_ft = [ d[0].reshape( ft_cnt ) for d in vect_data ];
     all_ft_np = np.array( all_ft )
-    print "Features array shape: ";
-    print all_ft_np.shape;
     mins = np.amin( all_ft_np, axis=0 );
     maxs = np.amax( all_ft_np, axis=0 );
     ranges = maxs - mins;
-    print "Amin shape ";
-    print mins.shape;
     print "Ranges: ";              
     print  ranges;
-    perc5 = np.percentile( all_ft_np, 15.0, axis=0 );
-    print "Perc5: ";              
-    print  perc5;
-    perc95 = np.percentile( all_ft_np, 85.0, axis=0 );    
-    print "Perc5 ranges: ";              
-    print  perc95 - perc5;
-    
+    perc15 = np.percentile( all_ft_np, 15.0, axis=0 );
+    print( "Percentile 15: %4.2f:" % perc15 );              
+    perc85 = np.percentile( all_ft_np, 85.0, axis=0 );    
+    print( "Percentile 85: %4.2f:" % perc85 );              
+    print  perc85 - perc15;
+  
+# =============================================================================
+  
 def  conf_mtr( results ):
     """
-       Build statistics of output data, y_org, y_rec are list of pairs (y_reco, y_org) where y_reco/y_org are class indices
+       Build statistics of output data, y_org, y_rec are list of pairs: 
+       (y_reco, y_org) where y_reco/y_org are class indices
     """
     y_org  = np.array( [ org for (reco, org) in results ] );
     y_reco = np.array( [ reco for (reco, org) in results ] );
@@ -346,8 +309,13 @@ def  conf_mtr( results ):
        max2.append( (j,j1,j2) );
       
     return (histo, conf, conf_t, true_rec, max2, distance, path);  
+
+# =============================================================================
     
 def save_stats( stats, file, phone_file ):
+    """
+       Stores  statistics created by conf_mtr in a file
+    """
     phones = []    
     with open( phone_file, "rt" ) as f_phn:
         for line in f_phn:
@@ -425,5 +393,94 @@ def save_stats( stats, file, phone_file ):
     print "Saving stats completed";
        
     
+# =============================================================================
+# =============================================================================
+# Auxiliary functions
+# =============================================================================
+# =============================================================================
+
+def getFeatureCnt( fname ):
+    """
+        Detect actual feature per frame count from MFSC text file.
+        It is assumed that each frame is represented by single line in mfsc file
+    """ 
+    f = open( fname, "rt" );
+    line = f.readline();
+    line = line.rstrip();
+    line = line.lstrip();
+    elems = re.split( "\ +", line );
+    f.close();
+    return len( elems );
+
+# ================================================================
+
+def getClassGrpCount( cls_grp_fname ):
+    """
+        Reads class cluster count (# of NN oputpus) from phoneme cluster 
+        file. Each cluster is a nonempty line in cluster file. It is also assumed
+        there there is UNK phoneme not directly represented in cluster file,
+        therefore actual number of clusters is increased by 1.
+    """
+    cls_cnt = 0;
+    with open( fname, "rt" ) as f:
+        for line in f:           
+            line = line.rstrip();
+            line = line.lstrip();
+            elems = re.split( "\ +", line );
+            if ( len(elems) > 0 ):
+               cls_cnt = cls_cnt + 1;
+    return len( cls_cnt + 1 );
+
+# ================================================================
+
+def getClassCnt( fname ):
+    """"
+       Detects actual class count from clss file. The class count is 
+       derived from the number of tokens in a single clss file line, where
+       the number of tokens is equal to the number of class plus 2
+    """
+    f = open( fname, "rt" );
+    line = f.readline();
+    line = line.rstrip();
+    line = line.lstrip();
+    elems = re.split( "\ +", line );
+ 
+    return len( elems) - 2 ;
+
+# =============================================================================
+    
+def process_utter( all_features, all_classes, features, classes, ctx, fraction, max_datasize  ):
+    """
+       Combines per-frame feature vectors from frames close to the central one
+       and builds contextual feature vector of a recognizable object (RO) corresponding
+       to the central frame. The sequence of contextual features are stored in 
+       all_features array. It also converts desired NN output vector into the class 
+       index of the phoneme represented by a central frame or RO
+    """
+    global current_af_pos;
+   
+    frm_cnt = len(features )
+    rows_cnt = 2*ctx + 1;
+    dst_f_len = asr.FEATURE_COUNT * ( rows_cnt );
+    layer_size = asr.FEATURE_COUNT/3
+    for i in range( frm_cnt ):
+        # if ( np.random.uniform() > fraction ):
+        #   continue;
+        lin_pos = i - ctx;      
+        for dst_pos in range( rows_cnt ):
+            pos = max( lin_pos, 0 );
+            pos = min( pos, frm_cnt - 1 );
+            # all_features[ current_af_pos, 0, dst_pos ] = features[pos]    
+            all_features[ current_af_pos, 0, dst_pos ] = features[pos][0:layer_size]         
+            all_features[ current_af_pos, 1, dst_pos ] = features[pos][layer_size:2*layer_size]
+            all_features[ current_af_pos, 2, dst_pos ] = features[pos][2*layer_size:3*layer_size]         
+            lin_pos = lin_pos + 1;
+         
+        all_classes[ current_af_pos ] = np.argmax(classes[i]);
+        current_af_pos = current_af_pos + 1;
+        if ( current_af_pos >= max_datasize ):
+            break;
+      
+    return current_af_pos;
         
     
