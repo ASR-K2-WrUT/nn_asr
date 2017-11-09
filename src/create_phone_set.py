@@ -3,7 +3,13 @@ import re
 import sys
 
 if ( len(sys.argv) < 2 ):
-   print "Usage: python create_phone_set.py <output_file_name> "
+   print"This program browses all *.phn files in the folder tree"
+   print"and created the list of all used phonemes. The list is"
+   print"stored in teh file indicated by teh parameter. The file"
+   print"names are compatible with TIMIT dataset."
+   print""
+   print "Usage:"
+   print "    create_phone_set.py <output_file_name> "
    sys.exit( 1 );
 
 f_out = sys.argv[1];
@@ -29,7 +35,7 @@ for dir, subdir, files in os.walk("."):
               phones.add( elems[2] );
            f.close();
            
-print "Phone cnt: " + str( len(phones) );
+print "Phone count: " + str( len(phones) );
 
 f = open( f_out, "wt" );
 for phn in phones:
